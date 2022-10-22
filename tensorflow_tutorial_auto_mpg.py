@@ -128,13 +128,15 @@ print(example_result)
 
 # 에프코가 끝날 때마다 dot(.)을 출력하여 훈련 진행 과정을 표시.
 class PrintDot(keras.callbacks.Callback):
-    def op_epoch_end(self, epoch, logs):
+    def on_epoch_end(self, epoch, logs):
         if epoch % 100 == 0: print('')
         print('.', end='')
 
+EPOCHS=1000
+
 history = model.fit(normed_train_data,
                     train_labels,
-                    epochs=1000,
+                    epochs=EPOCHS,
                     validation_split=0.2,
                     verbose=0,
                     callbacks=[PrintDot()])
@@ -175,3 +177,69 @@ def plot_history(history):
     plt.show()
 
 plot_history(history)
+
+#       이 그래프를 보면 수백번 에포크를 진행한 후에는 모델이 거의 향상되지 않는 것 같다.
+#       model.fit 메서드를 수정하여 검증점수가 향상되지 않으면 자동으로 훈련을 멈추도록 만들어보자.
+#       에포크마다 훈련 상태를 점검하기 위해 EarlyStopping callback을 사용해보자.
+#       지정된 에포크 횟수 동안 성능 향상이 없으면 자동으로 훈련이 멈춘다.
+
+model = build_model()
+
+# patience 매개변수는 성능 향상을 체크할 에포크 횟수이다.
+early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+
+history = model.fit(normed_train_data,
+                    train_labels,
+                    epochs=EPOCHS,
+                    validation_split=0.2,
+                    verbose=0,
+                    callbacks=[early_stop, PrintDot()])
+plot_history(history)
+
+#       이 그래프를 보면 검증세트의 평균 오차가 약 +/-2 MPG이다.
+
+#       모델을 훈련할 때 사용하지 않았던 테스트 세트에서 모델의 성능을 확인해보자.
+#       이를 통해 모델이 실전에 투입되었을 때 모델의 성능을 짐작할 수 있다.
+
+loss, mae, mse = model.evaluate(normed_test_data, test_labels, verbose=2)
+
+print("테스트 세트의 평균 절대 오차 : {:5.2f} MPG".format(mae))
+
+##  예측
+#   마지막으로 테스트 세트에 있는 샘플을 사용해 MPG값을 예측해 보자.
+
+test_predictions = model.predict(normed_test_data).flatten()
+
+plt.scatter(test_labels, test_predictions)
+plt.xlabel('True Values [MPG]')
+plt.ylabel('Predictions [MPG]')
+plt.axis('equal')
+plt.axis('square')
+plt.xlim([0,plt.xlim()[1]])
+plt.ylim([0,plt.ylim()[1]])
+_ = plt.plot([-100, 100], [-100, 100])
+plt.show()
+
+plt.clf()
+#   모델이 꽤 잘 예측한 것 같다. 다음으로 오차의 분포를 살펴보자.
+
+error = test_predictions - test_labels
+plt.hist(error, bins=25)
+plt.xlabel('Prediction Error[MPG]')
+_ = plt.ylabel('Count')
+plt.show()
+
+#   가우시안 분포가 아니지만 아마도 훈련 샘플의 수가 매우 작기 때문일것이다.
+
+'''
+결론 : 이 노트북은 회귀 문제를 위한 기법을 소개한다.
+       1. 평균 제곱 오차(Mean Square Error;MSE)는 회귀 문제에서 자주 사용하는 손실함수이다.
+          (분류 문제에서 사용하는 손실함수와 다르다)
+       2. 비슷하게 회귀에서 사용되는 평가 지표도 분류와는 다르다.
+          많이 사용하는 회귀 지표는 평균 절댓값 오차(Mean Absolute Error;MAE)이다.
+       3. 수치 입력 데이터의 특성이 여러 가지 범위를 가질 때 동일한 범위가 되도록
+          각 특성의 스케일을 독립적으로 조정해야 한다.
+       4. 훈련 데이터가 많지 않다면 과대적합을 피하기 위해
+          은닉층의 개수가 적은 소규모 네트워크를 선택하는 방법이 좋다.
+       5. 조기종료(Early stopping)은 과대적합을 방지하기 위한 좋은 방법이다.
+'''
